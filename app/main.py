@@ -4,8 +4,8 @@ from bson.objectid import ObjectId
 from fastapi import FastAPI, HTTPException
 from pymongo.errors import OperationFailure
 
-from db import db
-from serializers import serializeDict, serializeList
+from app.db import db
+from app.serializers import serializeDict, serializeList
 
 app = FastAPI()
 for col in db.list_collection_names():
