@@ -1,3 +1,5 @@
+from typing import List, Any, Union
+
 from pydantic import BaseModel
 
 
@@ -16,3 +18,6 @@ class ToyBaseSchema(BaseModel):
 class OwnerBaseSchema(BaseModel):
     email: str
     catsNumber: int
+
+
+

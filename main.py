@@ -1,8 +1,9 @@
 # main.py
+from typing import Union
 
 from bson.objectid import ObjectId
 from fastapi import FastAPI, HTTPException
-from pymongo.errors import OperationFailure
+from fastapi.encoders import jsonable_encoder
 
 from app.db import db
 from app.serializers import serializeDict, serializeList
@@ -15,6 +16,7 @@ db["cats"].insert_one(dict({"name": "Simba", "age": 4, "isCute": bool(False)}))
 db["cats"].insert_one(dict({"name": "Mitzi", "age": 2, "isCute": bool(False)}))
 db["cats"].insert_one(dict({"name": "Pitzi", "age": 3, "isCute": bool(True)}))
 db["cats"].insert_one(dict({"name": "Kitzi", "age": 10, "isCute": bool(True)}))
+db["cats"].insert_one(dict({"name": "Tommy", "age": 6, "isCute": bool(True)}))
 
 db["toys"].insert_one(dict({"title": "mouse",
                             "description": "a toy mouse",
@@ -48,73 +50,73 @@ db["owners"].insert_one(dict({
 }))
 
 
-@app.get("/")
-async def root():
-    return {"Hello World"}
-
-
 @app.get("/collections")
 async def getCollections():
-    return db.list_collection_names()
+    return {"collections": db.list_collection_names()}
 
 
 @app.get("/collections/{name}")
-async def getCollection(name):
-    try:
-        db.validate_collection(name)
-    except OperationFailure:
+async def getCollection(name: str):
+    if not bool(db.list_collections(filter={'name': name}).alive):
         raise HTTPException(
             status_code=404,
             detail=f"Couldn't find collection {name}"
         )
-    return serializeList(db[name].find())
+    return jsonable_encoder({"items": serializeList(db[name].find())})
+
+
+@app.get("/collections/{name}/count")
+async def getCollectionCount(name: str):
+    if not bool(db.list_collections(filter={'name': name}).alive):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Couldn't find collection {name}"
+        )
+
+    return jsonable_encoder({"count": db[name].count_documents({})})
+
+
+@app.get("/collections/{name}/fields")
+async def getCollectionFields(name: str):
+    if not bool(db.list_collections(filter={'name': name}).alive):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Couldn't find collection {name}"
+        )
+    document = serializeDict(db[name].find_one())
+    return {
+        "fields": [(field_name, type(field_value).__name__) for field_name, field_value in document.items() if field_name !="_id"]}
+
+
+@app.get("/collections/{name}/by")
+async def getCollection(name: str, field: str, value: Union[int, bool, str]):
+    if not bool(db.list_collections(filter={'name': name}).alive):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Couldn't find collection {name}"
+        )
+    query = {field: {"$exists": True}}
+
+    if db[name].find_one(query) is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Couldn't find field {field}"
+        )
+    return serializeList(db[name].find({field: value}))
 
 
 @app.get("/collections/{name}/{id}")
-async def getById(name: str, id: str):
-    try:
-        db.validate_collection(name)
-    except OperationFailure:
+async def getById(name, id):
+    if not bool(db.list_collections(filter={'name': name}).alive):
         raise HTTPException(
             status_code=404,
             detail=f"Couldn't find collection {name}"
         )
     try:
         return serializeDict(db[name].find_one({"_id": ObjectId(id)}))
-    except TypeError as err:
+    except TypeError:
         raise HTTPException(
             status_code=404,
-            detail=f"Couldn't find {id}"
+            detail=f"Couldn't find {id} in {name}"
         )
 
-
-@app.get("/collections/{name}/count")
-async def getCollectionCount(name):
-    try:
-        db.validate_collection(name)
-    except OperationFailure:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Couldn't find collection {name}"
-        )
-    return db[name].count_documents({})
-
-
-@app.get("/collections/cats/by/age/over")
-async def getCatsAgeOver(age: int):
-    return serializeList(db['cats'].find({"age": {"$gte": age}}))
-
-
-@app.get("/collections/cats/by/name")
-async def getCatByName(name: str):
-    return serializeList(db['cats'].find({"name": name}))
-
-
-@app.get("/collections/toys/by/price/below")
-async def getToysPriceLower(maxPrice: int):
-    return serializeList(db['cats'].find({"price": {"$gte": maxPrice}}))
-
-
-@app.get("/collections/owners/by/cats/over")
-async def getOwnersCatsOver(cats: int):
-    return serializeList(db['owners'].find({"catsNumber": {"$gte": cats}}))

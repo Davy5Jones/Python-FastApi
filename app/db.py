@@ -3,8 +3,8 @@ from pymongo import MongoClient
 
 from app.config import settings
 
-client = MongoClient(settings.mongodb_uri)
-db = client['CatProject']
+client = MongoClient(settings.MONGODB_URI)
+db = client[settings.MONGO_INITDB_DATABASE]
 
 Cat = db.cats
 Toy = db.toys
