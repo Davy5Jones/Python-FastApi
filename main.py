@@ -11,10 +11,13 @@ from app.serializers import serializeDict, serializeList
 
 app = FastAPI()
 
+@app.get("/")
+async def hello():
+    return jsonable_encoder({"A Json formatted hello message!"})
 
 @app.get("/collections")
 async def getCollections():
-    return {"collections": db.list_collection_names()}
+    return jsonable_encoder({"collections": db.list_collection_names()})
 
 
 @app.get("/collections/{name}")
@@ -46,9 +49,9 @@ async def getCollectionFields(name: str):
             detail=f"Couldn't find collection {name}"
         )
     document = serializeDict(db[name].find_one())
-    return {
+    return jsonable_encoder({
         "fields": [({"field_name": field_name, "type": type(field_value).__name__}) for field_name, field_value in
-                   document.items() if field_name != "_id"]}
+                   document.items() if field_name != "_id"]})
 
 
 @app.get("/collections/{name}/filter/{field}")
@@ -64,7 +67,7 @@ async def getCollection(name: str, field: str, value: Union[int, bool, str]):
             status_code=404,
             detail=f"Couldn't find field {field}"
         )
-    return serializeList(db[name].find({field: value}))
+    return jsonable_encoder(serializeList(db[name].find({field: value})))
 
 
 @app.get("/collections/{name}/{id}")
@@ -75,7 +78,7 @@ async def getById(name: str, id: str):
             detail=f"Couldn't find collection {name}"
         )
     try:
-        return serializeDict(db[name].find_one({"_id": ObjectId(id)}))
+        return jsonable_encoder(serializeDict(db[name].find_one({"_id": ObjectId(id)})))
     except TypeError:
         raise HTTPException(
             status_code=404,
@@ -96,11 +99,11 @@ async def addItem(name: str, model: types):
             detail=f"Incorrect data"
         )
     idx = db[name].insert_one(dict(model)).inserted_id
-    return serializeDict(db[name].find_one({"_id": ObjectId(idx)}))
+    return jsonable_encoder(serializeDict(db[name].find_one({"_id": ObjectId(idx)})))
 
 
-@app.put("/collections/{name}/{id}")
-async def updateItem(name: str, id: str, model: types):
+@app.put("/collections/{name}/{idx}")
+async def updateItem(name: str, idx: str, model: types):
     if not bool(db.list_collections(filter={'name': name}).alive):
         raise HTTPException(
             status_code=404,
@@ -111,5 +114,5 @@ async def updateItem(name: str, id: str, model: types):
             status_code=400,
             detail=f"Incorrect data"
         )
-    item = db[name].find_one_and_update({"_id": ObjectId(id)}, {"$set": dict(model)},return_document=True)
-    return serializeDict(item)
+    item = db[name].find_one_and_update({"_id": ObjectId(idx)}, {"$set": dict(model)},return_document=True)
+    return jsonable_encoder(serializeDict(item))
