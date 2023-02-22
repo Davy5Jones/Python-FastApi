@@ -2,7 +2,7 @@ from app.db import db
 from main import app
 
 
-#@app.on_event("startup")
+@app.on_event("startup")
 def init():
     for col in db.list_collection_names():
         db[col].delete_many({})
