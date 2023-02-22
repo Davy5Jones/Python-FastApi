@@ -4,6 +4,8 @@ from typing import Union
 from bson.objectid import ObjectId
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
+from pymongo.errors import DuplicateKeyError
+from starlette.responses import JSONResponse
 
 from app.db import db
 from app.schemes import collection_models, types
@@ -17,7 +19,7 @@ async def hello():
 
 @app.get("/collections")
 async def getCollections():
-    return jsonable_encoder({"collections": db.list_collection_names()})
+    return JSONResponse(jsonable_encoder({"collections": db.list_collection_names()}))
 
 
 @app.get("/collections/{name}")
@@ -27,7 +29,7 @@ async def getCollection(name: str):
             status_code=404,
             detail=f"Couldn't find collection {name}"
         )
-    return jsonable_encoder({"items": serializeList(db[name].find())})
+    return JSONResponse(jsonable_encoder({"items": serializeList(db[name].find())}))
 
 
 @app.get("/collections/{name}/count")
@@ -38,7 +40,7 @@ async def getCollectionCount(name: str):
             detail=f"Couldn't find collection {name}"
         )
 
-    return jsonable_encoder({"count": db[name].count_documents({})})
+    return JSONResponse(jsonable_encoder({"count": db[name].count_documents({})}))
 
 
 @app.get("/collections/{name}/fields")
@@ -49,9 +51,9 @@ async def getCollectionFields(name: str):
             detail=f"Couldn't find collection {name}"
         )
     document = serializeDict(db[name].find_one())
-    return jsonable_encoder({
+    return JSONResponse(jsonable_encoder({
         "fields": [({"field_name": field_name, "type": type(field_value).__name__}) for field_name, field_value in
-                   document.items() if field_name != "_id"]})
+                   document.items() if field_name != "_id"]}))
 
 
 @app.get("/collections/{name}/filter/{field}")
@@ -67,7 +69,7 @@ async def getCollection(name: str, field: str, value: Union[int, bool, str]):
             status_code=404,
             detail=f"Couldn't find field {field}"
         )
-    return jsonable_encoder({"items":serializeList(db[name].find({field: value}))})
+    return JSONResponse(jsonable_encoder({"items":serializeList(db[name].find({field: value}))}))
 
 
 @app.get("/collections/{name}/{id}")
@@ -78,7 +80,7 @@ async def getById(name: str, id: str):
             detail=f"Couldn't find collection {name}"
         )
     try:
-        return jsonable_encoder(serializeDict(db[name].find_one({"_id": ObjectId(id)})))
+        return JSONResponse(jsonable_encoder(serializeDict(db[name].find_one({"_id": ObjectId(id)}))))
     except TypeError:
         raise HTTPException(
             status_code=404,
@@ -98,8 +100,14 @@ async def addItem(name: str, model: types):
             status_code=400,
             detail=f"Incorrect data"
         )
-    idx = db[name].insert_one(dict(model)).inserted_id
-    return jsonable_encoder(serializeDict(db[name].find_one({"_id": ObjectId(idx)})))
+    try:
+        idx = db[name].insert_one(dict(model)).inserted_id
+    except DuplicateKeyError:
+        raise HTTPException (
+            status_code=400,
+            detail=f"Duplicate value inserted"
+        )
+    return JSONResponse(jsonable_encoder(serializeDict(db[name].find_one({"_id": ObjectId(idx)}))))
 
 
 @app.put("/collections/{name}/{idx}")
@@ -114,5 +122,11 @@ async def updateItem(name: str, idx: str, model: types):
             status_code=400,
             detail=f"Incorrect data"
         )
-    item = db[name].find_one_and_update({"_id": ObjectId(idx)}, {"$set": dict(model)},return_document=True)
-    return jsonable_encoder(serializeDict(item))
+    try:
+        item = db[name].find_one_and_update({"_id": ObjectId(idx)}, {"$set": dict(model)},return_document=True)
+    except DuplicateKeyError:
+        raise HTTPException (
+            status_code=400,
+            detail=f"Duplicate value inserted"
+        )
+    return JSONResponse(jsonable_encoder(serializeDict(item)))
