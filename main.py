@@ -67,7 +67,7 @@ async def getCollection(name: str, field: str, value: Union[int, bool, str]):
             status_code=404,
             detail=f"Couldn't find field {field}"
         )
-    return jsonable_encoder(serializeList(db[name].find({field: value})))
+    return jsonable_encoder({"items":serializeList(db[name].find({field: value}))})
 
 
 @app.get("/collections/{name}/{id}")
